@@ -19,12 +19,16 @@ jobs:
     - name: Download Skia
       shell: powershell
       run: |
-        $url = "https://github.com/aseprite/skia/releases/download/m102-861e474335/Skia-Windows-Release-x64.zip"
-        # Download using native bits
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $url -OutFile skia.zip
+        # 人肉确认过的真实链接：增加了 -v143 后缀
+        $url = "https://github.com/aseprite/skia/releases/download/m102-861e474335/Skia-Windows-Release-x64-v143.zip"
         
-        # Extract
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Write-Host "Downloading Skia from $url"
+        
+        # 使用 curl.exe 配合 -f 参数，如果 404 会直接报错，不会静默失败
+        curl.exe -f -L $url -o skia.zip
+        
+        Write-Host "Extracting Skia..."
         Expand-Archive -Path skia.zip -DestinationPath .\skia -Force
 
     - name: Run CMake Configuration
@@ -33,19 +37,19 @@ jobs:
         if (-not (Test-Path "build")) { mkdir build }
         $skia_path = "$(Get-Location)\skia"
         
-        # Use quotes for paths to avoid any space/character issues
         cmake -S . -B build -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `
           -DENABLE_UI=ON `
           -DLAF_BACKEND=skia `
           -DSKIA_DIR="$skia_path" `
-          -DSKIA_LIBRARY_DIR="$skia_path\out\Release-x64" `
-          -DSKIA_LIBRARY="$skia_path\out\Release-x64\skia.lib"
+          -DSKIA_LIBRARY_DIR="$skia_path/out/Release-x64" `
+          -DSKIA_LIBRARY="$skia_path/out/Release-x64/skia.lib"
 
     - name: Build Aseprite
       shell: powershell
       run: |
         cd build
+        # 限制只编译主程序，提高成功率
         ninja aseprite
 
     - name: Upload Artifact
