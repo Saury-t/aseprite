@@ -16,19 +16,24 @@ jobs:
     - name: Setup Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
 
-    - name: Download Skia
+    - name: Download Skia using GitHub CLI
       shell: powershell
+      env:
+        # 使用 GitHub 提供的令牌来确保下载权限和速率限制
+        GH_TOKEN: ${{ github.token }}
       run: |
-        # 人肉确认过的真实链接：增加了 -v143 后缀
-        $url = "https://github.com/aseprite/skia/releases/download/m102-861e474335/Skia-Windows-Release-x64-v143.zip"
+        # 使用 gh 命令行工具下载，指定 tag 且模糊匹配 Windows 的压缩包
+        gh release download m102-861e474335 `
+          --repo aseprite/skia `
+          --pattern "Skia-Windows-Release-x64*.zip" `
+          --output skia.zip `
+          --clobber
         
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Write-Host "Downloading Skia from $url"
+        # 确认下载到了真正的文件（必须大于 100MB）
+        if ((Get-Item skia.zip).Length -lt 100MB) {
+            throw "Downloaded file is too small. Check the release asset name."
+        }
         
-        # 使用 curl.exe 配合 -f 参数，如果 404 会直接报错，不会静默失败
-        curl.exe -f -L $url -o skia.zip
-        
-        Write-Host "Extracting Skia..."
         Expand-Archive -Path skia.zip -DestinationPath .\skia -Force
 
     - name: Run CMake Configuration
@@ -49,13 +54,12 @@ jobs:
       shell: powershell
       run: |
         cd build
-        # 限制只编译主程序，提高成功率
         ninja aseprite
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: aseprite-win-x64
+        name: aseprite-portable
         path: |
           build/bin/data
           build/bin/aseprite.exe
