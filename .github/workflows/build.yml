@@ -16,31 +16,16 @@ jobs:
     - name: Setup Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
 
-    - name: Download and Prepare Skia
+    - name: Download Skia
       shell: powershell
       run: |
-        # 设置 TLS 1.2 确保安全连接稳定
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        
         $url = "https://github.com/aseprite/skia/releases/download/m102-861e474335/Skia-Windows-Release-x64.zip"
-        $backupUrl = "https://github.com/blueloveTH/aseprite/releases/download/v0.01/skia.zip"
+        # Download using native bits
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $url -OutFile skia.zip
         
-        Write-Host "正在从主源下载 Skia..."
-        try {
-            Invoke-WebRequest -Uri $url -OutFile skia.zip -ErrorAction Stop
-            if ((Get-Item skia.zip).Length -lt 10MB) { throw "文件大小异常" }
-        } catch {
-            Write-Warning "主源下载失败，尝试备用源..."
-            Invoke-WebRequest -Uri $backupUrl -OutFile skia.zip
-        }
-
-        Write-Host "正在解压 Skia..."
+        # Extract
         Expand-Archive -Path skia.zip -DestinationPath .\skia -Force
-        
-        # 验证关键库文件是否存在
-        if (-not (Test-Path ".\skia\out\Release-x64\skia.lib")) {
-            throw "找不到 skia.lib，请检查解压路径是否正确"
-        }
 
     - name: Run CMake Configuration
       shell: powershell
@@ -48,7 +33,7 @@ jobs:
         if (-not (Test-Path "build")) { mkdir build }
         $skia_path = "$(Get-Location)\skia"
         
-        # 使用 PowerShell 的绝对路径传递，避免 CMake 找不到库
+        # Use quotes for paths to avoid any space/character issues
         cmake -S . -B build -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `
           -DENABLE_UI=ON `
@@ -66,7 +51,7 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: aseprite-windows-build
+        name: aseprite-win-x64
         path: |
           build/bin/data
           build/bin/aseprite.exe
